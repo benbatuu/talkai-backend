@@ -1,0 +1,338 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "./generated/client"
+  previewFeatures = ["multiSchema"]
+  binaryTargets   = ["native", "darwin", "debian-openssl-1.1.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["users", "transactions", "learning", "chats", "subscriptions"]
+}
+
+enum duration {
+  MONTHLY
+  YEARLY
+  LIFETIME
+
+  @@schema("subscriptions")
+}
+
+model packageFeature {
+  id        String   @id @default(uuid())
+  feature   String
+  available Boolean  @default(true)
+  packageId String
+  package   packages @relation(fields: [packageId], references: [id])
+
+  @@schema("subscriptions")
+}
+
+model packages {
+  id             String           @id @default(uuid())
+  name           String           @unique
+  description    String           @db.Text
+  icon           String // Icon name or path
+  duration       duration
+  popular        Boolean          @default(false)
+  highlightColor String? // Custom color for highlighting
+  savings        String? // e.g., "Save 33%"
+  features       packageFeature[]
+  prices         price[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  subscriptions  subscription[]
+
+  @@schema("subscriptions")
+}
+
+enum Currency {
+  USD
+  EUR
+  TRY
+
+  @@schema("subscriptions")
+}
+
+model price {
+  id        String   @id @default(uuid())
+  currency  Currency @default(TRY)
+  amount    Decimal  @db.Decimal(10, 2)
+  package   packages @relation(fields: [packageId], references: [id])
+  packageId String
+
+  @@schema("subscriptions")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  FAILED
+
+  @@schema("subscriptions")
+}
+
+model subscription {
+  id                String             @id @default(uuid())
+  userId            String
+  packageId         String
+  startDate         DateTime           @default(now())
+  endDate           DateTime
+  status            SubscriptionStatus @default(PENDING)
+  lastPaymentStatus String?
+  stripeCustomerId  String?
+  stripePaymentId   String?
+  stripePriceId     String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  user              user               @relation("subscriptions", fields: [userId], references: [id])
+  package           packages           @relation(fields: [packageId], references: [id])
+
+  @@schema("subscriptions")
+}
+
+model chatRoom {
+  id        String    @id @default(uuid())
+  userId    String
+  title     String    @default("New Chat")
+  language  String // The language being practiced in this chat room
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt
+  user      user      @relation(fields: [userId], references: [id])
+  messages  chat[]
+
+  @@schema("chats")
+}
+
+model chat {
+  id        String    @id @default(uuid())
+  roomId    String
+  userId    String
+  message   String    @db.Text
+  role      String    @default("user") // "user" or "assistant"
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt
+  user      user      @relation(fields: [userId], references: [id])
+  room      chatRoom  @relation(fields: [roomId], references: [id])
+
+  @@schema("chats")
+}
+
+model learningProgress {
+  id         String    @id @default(uuid())
+  userid     String
+  languageID String
+  progress   Int       @default(0)
+  createdat  DateTime  @default(now())
+  updatedat  DateTime?
+  user       user      @relation(fields: [userid], references: [id])
+  language   languages @relation(fields: [languageID], references: [id])
+
+  @@schema("learning")
+}
+
+model languages {
+  id               String             @id @default(uuid())
+  flag             String
+  name             String
+  code             String             @unique
+  learningProgress learningProgress[]
+  user             user[]
+
+  @@schema("learning")
+}
+
+model entrance {
+  id        String   @id @default(uuid())
+  type      Int
+  useragent String
+  ipaddress String
+  userid    String
+  createdat DateTime @default(now())
+
+  @@schema("transactions")
+}
+
+model apiclient {
+  id          String    @id @default(uuid())
+  name        String
+  key         String    @unique
+  secret      String    @unique
+  type        Int
+  createdat   DateTime  @default(now())
+  createdby   String
+  updatedat   DateTime?
+  updatedby   String?
+  isactive    Boolean
+  createduser user      @relation("createdbyapiclient", fields: [createdby], references: [id])
+  updateduser user?     @relation("updatedbyapiclient", fields: [updatedby], references: [id])
+
+  @@schema("users")
+}
+
+model refreshtoken {
+  id        String    @id @default(uuid())
+  userid    String
+  token     String
+  createdat DateTime  @default(now())
+  updatedat DateTime?
+  expiresat DateTime?
+  user      user      @relation(fields: [userid], references: [id])
+
+  @@schema("users")
+}
+
+model revokedtoken {
+  id    String   @id @default(uuid())
+  token String   @unique
+  date  DateTime @default(now())
+
+  @@schema("users")
+}
+
+model role {
+  id              String           @id @default(uuid())
+  name            String
+  createdby       String
+  createdat       DateTime         @default(now())
+  updatedby       String?
+  updatedat       DateTime?
+  issystemrole    Boolean          @default(false)
+  createduser     user             @relation("createdbyrole", fields: [createdby], references: [id])
+  updateduser     user?            @relation("updatedbyrole", fields: [updatedby], references: [id])
+  rolepermissions rolepermission[]
+  userroles       userrole[]
+
+  @@schema("users")
+}
+
+model notification {
+  id        String    @id @default(uuid())
+  touserid  String
+  message   String
+  url       String
+  createdby Int
+  createdat DateTime  @default(now())
+  readedat  DateTime?
+  to        user      @relation(fields: [touserid], references: [id])
+
+  @@schema("users")
+}
+
+model permission {
+  id              String           @id @default(uuid())
+  name            String
+  value           String           @unique
+  group           String
+  description     String
+  createdby       String
+  createdat       DateTime         @default(now())
+  updatedby       String?
+  updatedat       DateTime?
+  createduser     user             @relation("createdbypermission", fields: [createdby], references: [id])
+  updateduser     user?            @relation("updatedbypermission", fields: [updatedby], references: [id])
+  rolepermissions rolepermission[]
+  userpermissions userpermission[]
+
+  @@schema("users")
+}
+
+model rolepermission {
+  id           String     @id @default(uuid())
+  roleid       String
+  permissionid String
+  createdat    DateTime   @default(now())
+  createdby    String
+  updatedby    String?
+  updatedat    DateTime?
+  createduser  user       @relation("createdbyrolepermission", fields: [createdby], references: [id])
+  permission   permission @relation(fields: [permissionid], references: [id])
+  role         role       @relation(fields: [roleid], references: [id], onDelete: Cascade)
+  updateduser  user?      @relation("updatedbyrolepermission", fields: [updatedby], references: [id])
+
+  @@schema("users")
+}
+
+model user {
+  id                     String             @id @default(uuid())
+  firstname              String
+  lastname               String
+  phone                  String?
+  email                  String             @unique
+  password               String
+  appLanguage            String?            @default("en")
+  learningLanguage       String?
+  learningLevel          String?            @default("A1.1")
+  theme                  String?            @default("light")
+  avatar                 String?            @default("https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/avatars/2b/2bcb79dbc6d07bc84af63b91b3f2be1ca8a476ff.jpg")
+  createdby              String
+  createdat              DateTime           @default(now())
+  updatedby              String?
+  updatedat              DateTime?
+  status                 Int                @default(1)
+  lastentranceat         DateTime?
+  lastexitat             DateTime?
+  lastloginat            DateTime?
+  stripeCustomerId       String?
+  notificationuser       notification[]
+  createdapiclients      apiclient[]        @relation("createdbyapiclient")
+  updatedapiclients      apiclient[]        @relation("updatedbyapiclient")
+  createdpermissions     permission[]       @relation("createdbypermission")
+  updatedpermissions     permission[]       @relation("updatedbypermission")
+  refreshtokens          refreshtoken[]
+  createdroles           role[]             @relation("createdbyrole")
+  updatedroles           role[]             @relation("updatedbyrole")
+  createdrolepermissions rolepermission[]   @relation("createdbyrolepermission")
+  updatedrolepermissions rolepermission[]   @relation("updatedbyrolepermission")
+  createduser            user               @relation("usercreateduser", fields: [createdby], references: [id])
+  createdusers           user[]             @relation("usercreateduser")
+  updateduser            user?              @relation("userupdateduser", fields: [updatedby], references: [id])
+  updatedusers           user[]             @relation("userupdateduser")
+  createduserpermissions userpermission[]   @relation("createdbyuserpermission")
+  updateduserpermissions userpermission[]   @relation("updatedbyuserpermission")
+  userpermissions        userpermission[]   @relation("user")
+  createduserroles       userrole[]         @relation("createdbyuserrole")
+  updateduserroles       userrole[]         @relation("updatedbyuserrole")
+  userroles              userrole[]         @relation("user")
+  language               languages[]
+  learningProgress       learningProgress[]
+  chats                  chat[]
+  chatRooms              chatRoom[]
+  subscriptions          subscription[]     @relation("subscriptions")
+
+  @@schema("users")
+}
+
+model userpermission {
+  id           String     @id @default(uuid())
+  userid       String
+  permissionid String
+  createdby    String
+  createdat    DateTime   @default(now())
+  updatedby    String?
+  updatedat    DateTime?
+  createduser  user       @relation("createdbyuserpermission", fields: [createdby], references: [id])
+  permission   permission @relation(fields: [permissionid], references: [id])
+  updateduser  user?      @relation("updatedbyuserpermission", fields: [updatedby], references: [id])
+  user         user       @relation("user", fields: [userid], references: [id])
+
+  @@schema("users")
+}
+
+model userrole {
+  id          String    @id @default(uuid())
+  userid      String
+  roleid      String
+  createdby   String
+  createdat   DateTime  @default(now())
+  updatedby   String?
+  updatedat   DateTime?
+  createduser user      @relation("createdbyuserrole", fields: [createdby], references: [id])
+  role        role      @relation(fields: [roleid], references: [id])
+  updateduser user?     @relation("updatedbyuserrole", fields: [updatedby], references: [id])
+  user        user      @relation("user", fields: [userid], references: [id])
+
+  @@schema("users")
+}
